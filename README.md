@@ -1,2 +1,0 @@
-# ClearX
-clear system
