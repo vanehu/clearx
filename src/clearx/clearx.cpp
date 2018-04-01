@@ -86,7 +86,7 @@ int __stdcall ConsoleHandler( unsigned long event ) { // 控制台事件检测
 		syslog->LogWrite( basicx::syslog_level::c_warn, log_cate, std::string( "控制台窗口被强制关闭，系统结束运行！\r\n" ) );
 		SystemUninitialize(); // 这里一般来不及清理
 		break;
-}
+	}
 #endif
 
 #ifdef __OS_WINDOWS__
