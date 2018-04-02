@@ -50,12 +50,7 @@
 
 bool g_command_model = false; // 标记进入命令行模式
 bool g_block_auto_info = false; // 阻止自动显示信息
-
-#ifdef __OS_WINDOWS__
 void* g_single_mutex = NULL; // 单例限制
-NOTIFYICONDATA g_nid_tray_icon; // 系统托盘
-const unsigned int g_wm_taskbar_created = ::RegisterWindowMessage( L"TaskBarCreated" ); // 桌面重启后更新托盘图标
-#endif
 
 void SystemUninitialize() { // 在控制台事件和单例限制退出时调用会异常
 	try {
@@ -198,43 +193,6 @@ void SetConsoleWindow() {
 #endif
 }
 
-void SetSystemTrayIcon() {
-#ifdef __OS_WINDOWS__
-	wchar_t app_exec_path[MAX_PATH] = { 0 };
-	GetModuleFileName( NULL, app_exec_path, MAX_PATH );
-	std::wstring string_path( app_exec_path );
-	size_t slash_index = string_path.rfind( '\\' );
-	std::wstring app_icon_path = string_path.substr( 0, slash_index ) + LOGO_APP_IMAGE;
-
-	// 获取窗口句柄
-	wchar_t title[255];
-	GetConsoleTitle( title, 255 );
-	HWND h_wnd = FindWindow( L"ConsoleWindowClass", title );
-
-	// 设置托盘 NOTIFYICONDATA 结构体
-	// g_nid_tray_icon.cbSize = sizeof( NOTIFYICONDATA ); // 控制台模式下使用 VS2008 或更高版本时在 XP 系统上无法弹出气泡提示
-	g_nid_tray_icon.cbSize = NOTIFYICONDATA_V2_SIZE;
-	g_nid_tray_icon.hIcon = (HICON)LoadImage( NULL, app_icon_path.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE ); // 从 ico 文件读取图标
-	g_nid_tray_icon.hWnd = h_wnd;
-	g_nid_tray_icon.uCallbackMessage = NULL;
-	g_nid_tray_icon.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE | NIF_INFO; // 打开相应功能
-	g_nid_tray_icon.uID = NULL;
-	wcscpy_s( g_nid_tray_icon.szTip, 128, TRAY_POP_START ); // 托盘图标提示字符串
-	wcscpy_s( g_nid_tray_icon.szInfoTitle, 64, TRAY_POP_TITLE ); // 气球型提示标题
-	g_nid_tray_icon.dwInfoFlags = NIIF_INFO;
-	wcscpy_s( g_nid_tray_icon.szInfo, 256, TRAY_POP_START ); // 气球型提示字符串
-	g_nid_tray_icon.uTimeout = 500; // 提示时间
-	// 添加托盘图标：Shell_NotifyIcon( DWORD dwMessage, PNOTIFYICONDATA lpData )
-	Shell_NotifyIcon( NIM_ADD, &g_nid_tray_icon );
-	// 更改托盘图标
-	// g_nid_tray_icon.hIcon = LoadIcon( NULL, IDI_QUESTION );
-	// strcpy( g_nid_tray_icon.szTip, "fhsdjdhggggg" );
-	// Shell_NotifyIcon( NIM_MODIFY, &g_nid_tray_icon );
-	// 删除托盘图标
-	// Shell_NotifyIcon( NIM_DELETE, &g_nid_tray_icon );
-#endif
-}
-
 bool SystemInitialize() {
 	std::string log_info;
 	std::string log_cate = "<SYSTEM_INIT>";
@@ -277,8 +235,7 @@ int main( int argc, char* argv[] ) {
 		ConsoleEventsSet();  // 01
 		CheckSingleMutex();  // 02
 		SetConsoleWindow();  // 03
-		SetSystemTrayIcon(); // 04
-		SystemInitialize();  // 05
+		SystemInitialize();  // 04
 
 		while( 1 ) {
 			std::this_thread::sleep_for( std::chrono::seconds( 1 ) );
@@ -287,18 +244,6 @@ int main( int argc, char* argv[] ) {
 				if( false == g_block_auto_info ) {
 					g_block_auto_info = true;
 					syslog->LogWrite( basicx::syslog_level::c_info, log_cate, std::string( "用户 进入 命令行模式。" ) );
-
-					// 更改托盘图标
-#ifdef __OS_WINDOWS__
-					g_nid_tray_icon.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE | NIF_INFO;
-					wcscpy_s( g_nid_tray_icon.szInfoTitle, 64, TRAY_POP_TITLE ); // 气球型提示标题
-					g_nid_tray_icon.dwInfoFlags = NIIF_INFO;
-					wcscpy_s( g_nid_tray_icon.szInfo, 256, L"进入 命令行模式" ); // 气球型提示字符串
-					g_nid_tray_icon.uTimeout = 500; // 提示时间
-					// g_nid_tray_icon.hIcon = g_tray_icon_02;
-					Shell_NotifyIcon( NIM_MODIFY, &g_nid_tray_icon );
-#endif
-
 					char user_input[CFG_MAX_PATH_LEN] = { 0 }; // 缓存输入
 					syslog->LogPrint( basicx::syslog_level::c_info, std::string( "<USER_COMMAND>" ), std::string( "CMD>: " ) ); // 最好不换行
 					gets_s( user_input, CFG_MAX_PATH_LEN );
@@ -329,9 +274,6 @@ int main( int argc, char* argv[] ) {
 						else if( command == "exit;" || command == "04" ) { // 用户退出系统
 							// if( syskit->SystemExit() ) {
 							if( true ) {
-#ifdef __OS_WINDOWS__
-								Shell_NotifyIcon( NIM_DELETE, &g_nid_tray_icon ); // 删除托盘图标
-#endif
 								SystemUninitialize(); // 这里交给主线程退出时清理
 								exit( 0 );
 							}
@@ -367,20 +309,7 @@ int main( int argc, char* argv[] ) {
 				if( true == g_block_auto_info ) {
 					g_block_auto_info = false;
 					syslog->LogWrite( basicx::syslog_level::c_info, log_cate, std::string( "用户 退出 命令行模式。" ) );
-
-					// 更改托盘图标
-#ifdef __OS_WINDOWS__
-					g_nid_tray_icon.uFlags = NIF_TIP | NIF_ICON | NIF_MESSAGE | NIF_INFO;
-					wcscpy_s( g_nid_tray_icon.szInfoTitle, 64, TRAY_POP_TITLE ); // 气球型提示标题
-					g_nid_tray_icon.dwInfoFlags = NIIF_INFO;
-					wcscpy_s( g_nid_tray_icon.szInfo, 256, L"退出 命令行模式" ); // 气球型提示字符串
-					g_nid_tray_icon.uTimeout = 500; // 提示时间
-					// g_nid_tray_icon.hIcon = g_tray_icon_02;
-					Shell_NotifyIcon( NIM_MODIFY, &g_nid_tray_icon );
-#endif
-
 					g_command_model = false;
-
 					syslog->ClearScreen( 0, 0, true ); // 清屏
 				}
 			}
